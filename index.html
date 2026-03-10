@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kabinett AI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#080808;font-family:'DM Mono','Courier New',monospace;color:#e0e0e0}
+input,button,select{font-family:inherit}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#0a0a0a}
+::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:2px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes scanPulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+#app{display:flex;flex-direction:column;width:100vw;height:100vh}
+#topbar{display:flex;align-items:center;border-bottom:1px solid #1a1a1a;background:#050505;height:52px;flex-shrink:0;z-index:10}
+#main{flex:1;overflow:hidden;position:relative;min-height:0}
+.screen{display:none;height:100%;width:100%}
+.screen.active{display:flex}
+
+/* LOGO */
+#logo{width:190px;padding:0 20px;border-right:1px solid #1a1a1a;display:flex;align-items:center;gap:10px;height:100%;flex-shrink:0}
+#logo-grid{width:22px;height:22px;background:#c8a96e;display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:4px;flex-shrink:0}
+#logo-grid div{background:#0a0805}
+#logo-name{color:#c8a96e;font-size:12px;letter-spacing:.25em;font-weight:500}
+
+/* STEPPER */
+#stepper{flex:1;display:flex;align-items:center;padding:0 20px;gap:0;overflow-x:auto}
+.si{display:flex;align-items:center}
+.sb{display:flex;align-items:center;gap:7px;background:transparent;border:none;cursor:pointer;padding:4px 0;white-space:nowrap}
+.sb.locked{cursor:default}
+.sdot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0;transition:all .3s}
+.slabel{font-size:10px;letter-spacing:.08em;transition:color .3s}
+.sline{width:20px;height:1px;margin:0 6px;transition:background .3s;flex-shrink:0}
+#ai-status{padding:0 16px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-left:1px solid #1a1a1a}
+.ai-dot{width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e;animation:scanPulse 2s infinite}
+#ai-status span{color:#2a2a2a;font-size:10px;letter-spacing:.1em}
+
+/* ── SCAN ── */
+#scan-screen{flex-direction:column;align-items:center;justify-content:center;gap:24px;background:#080808}
+#dropzone{position:relative;width:580px;height:360px;background:#0e0e0e;border-radius:10px;border:1px dashed #2a2a2a;overflow:hidden;transition:border-color .2s;cursor:pointer}
+#dropzone:hover{border-color:#3a3a3a}
+#dropzone.dragover{border-color:#c8a96e60;background:#0f0e0b}
+#drop-idle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;height:100%;pointer-events:none}
+#drop-idle svg{opacity:.25}
+#drop-idle p{color:#3a3a3a;font-size:13px;letter-spacing:.12em}
+#drop-idle small{color:#222;font-size:11px}
+#file-input{display:none}
+#scan-photo{display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#scan-overlay{display:none;position:absolute;inset:0}
+#scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#00d4ff 20%,#00d4ff 80%,transparent);box-shadow:0 0 10px #00d4ff,0 0 20px #00d4ff50;top:0}
+#scan-labels{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.slbl{background:rgba(0,0,0,.9);border:1px solid #00d4ff30;padding:3px 9px;border-radius:3px;font-size:10px;color:#00d4ff;letter-spacing:.05em;animation:fadeUp .3s ease}
+#scan-boxes{position:absolute;inset:0;pointer-events:none}
+.bbox{position:absolute;border-width:2px;border-style:solid;border-radius:2px;animation:fadeUp .4s ease}
+.bbox-label{position:absolute;top:-18px;left:0;font-size:9px;letter-spacing:.05em;padding:2px 5px;border-radius:2px}
+#scan-legend{position:absolute;bottom:10px;left:10px;display:none;gap:10px}
+.leg{display:flex;align-items:center;gap:5px}
+.leg-box{width:9px;height:9px;border-width:2px;border-style:solid}
+.leg span{font-size:9px;color:#999}
+#scan-actions{display:flex;gap:12px;align-items:center}
+#scan-upload-btn{background:transparent;border:1px solid #222;color:#555;padding:9px 20px;border-radius:5px;font-size:11px;letter-spacing:.1em;cursor:pointer;transition:all .15s}
+#scan-upload-btn:hover{border-color:#444;color:#888}
+#scan-next-btn{background:linear-gradient(135deg,#c8a96e,#a07840);border:none;color:#0a0805;padding:10px 30px;border-radius:5px;font-size:12px;letter-spacing:.15em;cursor:pointer;font-weight:700;display:none}
+#scan-hint{color:#252525;font-size:11px;letter-spacing:.08em}
+
+/* ── EDIT ── */
+#edit-screen{flex-direction:row}
+#tool-panel{width:54px;background:#0c0c0c;border-right:1px solid #1a1a1a;display:flex;flex-direction:column;align-items:center;padding-top:14px;gap:4px;flex-shrink:0}
+.tbtn{width:38px;height:38px;border-radius:7px;background:transparent;border:1px solid transparent;color:#2e2e2e;font-size:14px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.tbtn:hover{color:#555;border-color:#222}
+.tbtn.active{background:#c8a96e18;border-color:#c8a96e50;color:#c8a96e}
+.ttip{font-size:8px;letter-spacing:.04em;color:#222;text-align:center;width:54px;padding-bottom:4px}
+#edit-canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#0e0e0e;overflow:hidden;position:relative}
+#edit-img-container{position:relative;display:inline-block}
+#edit-photo{display:block;max-width:100%;max-height:calc(100vh - 160px);border-radius:6px}
+#edit-photo.placeholder{width:520px;height:300px;background:linear-gradient(180deg,#151009,#2a1c0e);border-radius:6px}
+#edit-bboxes{position:absolute;inset:0;pointer-events:none}
+.edit-bbox{position:absolute;border-width:2px;border-style:solid;cursor:pointer;pointer-events:all;transition:all .15s;border-radius:1px}
+.edit-bbox:hover{filter:brightness(1.4)}
+.edit-bbox.selected{box-shadow:0 0 0 1px #c8a96e,0 0 18px #c8a96e40!important;border-color:#c8a96e!important}
+#add-hint{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);border:1px solid #c8a96e30;border-radius:4px;padding:6px 14px;font-size:10px;color:#c8a96e;letter-spacing:.08em;pointer-events:none;display:none}
+#prop-panel{width:220px;background:#0c0c0c;border-left:1px solid #1a1a1a;padding:16px;position:relative;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto}
+#prop-head{color:#252525;font-size:9px;letter-spacing:.2em;margin-bottom:14px}
+.pfield{margin-bottom:10px}
+.plabel{color:#2a2a2a;font-size:9px;letter-spacing:.1em;margin-bottom:4px}
+.pinput{width:100%;background:#111;border:1px solid #1a1a1a;border-radius:4px;padding:6px 9px;color:#c8a96e;font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
+.pinput:focus{border-color:#c8a96e40}
+.pselect{width:100%;background:#111;border:1px solid #1a1a1a;border-radius:4px;padding:6px 9px;color:#c8a96e;font-size:12px;font-family:inherit;outline:none;cursor:pointer}
+.pselect option{background:#111}
+#door-count-row{display:flex;align-items:center;gap:8px}
+.dc-btn{width:30px;height:30px;background:#111;border:1px solid #1e1e1e;border-radius:4px;color:#666;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;transition:all .15s}
+.dc-btn:hover{border-color:#c8a96e60;color:#c8a96e}
+#door-count-val{flex:1;text-align:center;color:#c8a96e;font-size:16px;font-weight:500}
+#prop-empty{color:#1e1e1e;font-size:10px;line-height:1.8}
+#prop-detail{display:none}
+#edit-next-btn{margin-top:auto;background:#c8a96e;border:none;color:#0a0805;padding:9px;border-radius:4px;font-size:11px;letter-spacing:.1em;cursor:pointer;font-weight:700;width:100%;margin-top:14px}
+
+/* ── MATERIAL ── */
+#mat-screen{flex-direction:column}
+#mat-preview{flex:1;display:flex;align-items:center;justify-content:center;background:#0c0c0c;position:relative;overflow:hidden;min-height:0}
+#mat-photo-wrap{position:relative;display:inline-block}
+#mat-photo{display:block;max-width:100%;max-height:calc(100vh - 230px);border-radius:6px}
+#mat-photo.placeholder{width:520px;height:280px;background:linear-gradient(180deg,#151009,#2a1c0e);border-radius:6px}
+.mat-cab-overlay{position:absolute;border-radius:1px;transition:background .35s ease;cursor:pointer;mix-blend-mode:multiply}
+#mat-badge{position:absolute;top:14px;right:14px;background:rgba(5,5,5,.92);border:1px solid #1e1e1e;border-radius:6px;padding:8px 12px;display:flex;align-items:center;gap:8px}
+#mat-badge-dot{width:18px;height:18px;border-radius:50%;border:1px solid #2a2a2a;transition:background .3s}
+#mat-badge-name{color:#c8a96e;font-size:11px}
+#mat-drawer{background:#080808;border-top:1px solid #1a1a1a;padding:14px 20px;flex-shrink:0}
+#mat-tabs-row{display:flex;gap:4px;margin-bottom:14px;align-items:center}
+.mtab{background:transparent;border:1px solid transparent;color:#2a2a2a;padding:4px 12px;border-radius:16px;font-size:10px;letter-spacing:.1em;cursor:pointer;transition:all .15s}
+.mtab:hover{color:#444}
+.mtab.active{background:#c8a96e12;border-color:#c8a96e40;color:#c8a96e}
+#mat-go-btn{margin-left:auto;background:#c8a96e;border:none;color:#0a0805;padding:5px 18px;border-radius:16px;font-size:10px;letter-spacing:.1em;cursor:pointer;font-weight:700}
+#mat-bottom-row{display:flex;gap:18px;align-items:flex-end}
+#mat-spheres-wrap{flex:1;overflow-x:auto;padding-bottom:4px}
+#mat-spheres{display:flex;gap:14px}
+.msphere-wrap{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;transition:transform .15s}
+.msphere-wrap:hover{transform:translateY(-2px)}
+.msphere{width:48px;height:48px;border-radius:50%;transition:all .2s}
+.msname{font-size:8px;color:#2a2a2a;text-align:center;width:54px;letter-spacing:.04em;line-height:1.3;transition:color .2s}
+
+/* RGB */
+#rgb-panel{background:#0e0e0e;border:1px solid #1a1a1a;border-radius:8px;padding:12px 14px;width:210px;flex-shrink:0}
+#rgb-panel-title{color:#252525;font-size:9px;letter-spacing:.15em;margin-bottom:10px}
+#rgb-preview-bar{height:38px;border-radius:5px;margin-bottom:10px;border:1px solid #1a1a1a;transition:background .1s;position:relative;overflow:hidden}
+#rgb-preview-bar::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 28% 28%,rgba(255,255,255,.2),transparent 55%)}
+.rgb-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.rgb-letter{width:12px;font-size:10px;font-weight:500;flex-shrink:0}
+.rgb-r-l{color:#ef4444}.rgb-g-l{color:#22c55e}.rgb-b-l{color:#3b82f6}
+.rgb-slider{flex:1;-webkit-appearance:none;height:3px;border-radius:2px;outline:none;cursor:pointer;background:#1a1a1a}
+.rgb-slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;cursor:pointer;border:2px solid #0e0e0e;transition:transform .1s}
+.rgb-slider::-webkit-slider-thumb:hover{transform:scale(1.2)}
+.rgb-r-s::-webkit-slider-thumb{background:#ef4444}
+.rgb-g-s::-webkit-slider-thumb{background:#22c55e}
+.rgb-b-s::-webkit-slider-thumb{background:#3b82f6}
+.rgb-num{width:28px;text-align:right;color:#3a3a3a;font-size:10px}
+#rgb-hex-row{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #1a1a1a}
+#rgb-hash{color:#2a2a2a;font-size:11px}
+#rgb-hex-input{flex:1;background:#111;border:1px solid #1a1a1a;border-radius:3px;padding:5px 7px;color:#c8a96e;font-size:11px;font-family:inherit;outline:none;letter-spacing:.06em;text-transform:uppercase}
+#rgb-hex-input:focus{border-color:#c8a96e40}
+#rgb-apply-btn{background:#c8a96e18;border:1px solid #c8a96e40;color:#c8a96e;padding:5px 10px;border-radius:3px;font-size:9px;letter-spacing:.1em;cursor:pointer;white-space:nowrap}
+#rgb-apply-btn:hover{background:#c8a96e28}
+
+/* ── ANALYSIS ── */
+#ana-screen{flex-direction:row}
+#ana-left{flex:1;display:flex;align-items:center;justify-content:center;background:#0c0c0c;position:relative;overflow:hidden}
+#ana-photo-wrap{position:relative;max-width:90%;max-height:90%}
+#ana-photo{display:block;max-width:100%;max-height:calc(100vh - 120px);border-radius:6px}
+#ana-photo.placeholder{width:460px;height:280px;background:linear-gradient(180deg,#151009,#2a1c0e);border-radius:6px}
+.ana-cab-hl{position:absolute;border:1px solid #2a2a2a;cursor:pointer;transition:all .2s;border-radius:1px}
+.ana-cab-hl.hl{background:rgba(200,169,110,.1)!important;border-color:#c8a96e!important;box-shadow:0 0 12px #c8a96e20}
+#ana-right{width:360px;background:#080808;border-left:1px solid #1a1a1a;display:flex;flex-direction:column;flex-shrink:0}
+#ana-thead{padding:12px 14px;border-bottom:1px solid #1a1a1a;display:flex;justify-content:space-between;align-items:center}
+#ana-thead span:first-child{color:#555;font-size:10px;letter-spacing:.12em}
+#ana-thead span:last-child{color:#222;font-size:9px}
+#ana-cols{display:grid;grid-template-columns:22px 55px 68px 38px 1fr 22px;gap:4px;padding:7px 14px;border-bottom:1px solid #1a1a1a}
+#ana-cols span{color:#1e1e1e;font-size:8px;letter-spacing:.1em}
+#ana-tbody{flex:1;overflow-y:auto}
+.arow{display:grid;grid-template-columns:22px 55px 68px 38px 1fr 22px;gap:4px;padding:8px 14px;border-bottom:1px solid #0f0f0f;cursor:pointer;transition:background .12s;align-items:center}
+.arow:hover{background:#0d0d0d}
+.arow.sel{background:#c8a96e06;border-left:2px solid #c8a96e40;padding-left:12px}
+.arow .c0{color:#222;font-size:11px}
+.arow .c1{color:#ccc;font-size:10px}
+.arow .c2{color:#c8a96e;font-size:10px}
+.arow .c3{color:#666;font-size:10px;text-align:center}
+.arow .c4{color:#333;font-size:9px}
+.arow .c5{font-size:12px;color:#ef4444;text-align:center}
+#ana-warn{display:none;margin:10px;padding:9px 12px;background:#ef444410;border:1px solid #ef444425;border-radius:5px;font-size:10px;color:#ef4444;line-height:1.6}
+#ana-next-btn{margin:10px;background:#c8a96e;border:none;color:#0a0805;padding:9px;border-radius:5px;font-size:11px;letter-spacing:.1em;cursor:pointer;font-weight:700}
+
+/* ── STUDIO ── */
+#studio-screen{flex-direction:column}
+#studio-viewport{flex:1;position:relative;overflow:hidden;background:#080808;display:flex;align-items:center;justify-content:center}
+#studio-photo-bg{display:block;max-width:100%;max-height:100%;object-fit:contain;border-radius:0;user-select:none;pointer-events:none}
+#studio-photo-bg.placeholder{width:100%;height:100%;background:linear-gradient(180deg,#151009,#2a1c0e)}
+#studio-overlay-wrap{position:absolute;inset:0;pointer-events:none}
+/* Each cab overlay sits on the photo */
+.sov-cab{position:absolute;pointer-events:all;cursor:default;transition:filter .2s}
+.sov-cab-inner{width:100%;height:100%;position:relative;border-radius:1px;overflow:visible;transform-style:preserve-3d}
+/* door panels as CSS 3D flaps */
+.sov-door{position:absolute;top:2%;height:96%;background-clip:padding-box;border-radius:1px;transform-origin:left center;transition:transform .55s cubic-bezier(.4,0,.2,1);backface-visibility:hidden}
+.sov-handle{position:absolute;right:8%;top:50%;transform:translateY(-50%);width:3px;height:22%;border-radius:2px;background:#999}
+/* tinted glass shine overlay on door */
+.sov-door::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.12) 0%,transparent 50%);pointer-events:none}
+/* light overlay for warm/cool */
+#studio-light-overlay{position:absolute;inset:0;pointer-events:none;transition:background .5s;mix-blend-mode:soft-light}
+/* controls */
+#studio-controls{background:#060606;border-top:1px solid #1a1a1a;padding:12px 20px;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.sctrl{background:transparent;border:1px solid #1a1a1a;color:#333;padding:6px 12px;border-radius:4px;font-size:10px;cursor:pointer;transition:all .15s;letter-spacing:.08em}
+.sctrl:hover{border-color:#2a2a2a;color:#555}
+.sctrl.on{background:#c8a96e12;border-color:#c8a96e40;color:#c8a96e}
+#studio-next-btn{margin-left:auto;background:#c8a96e;border:none;color:#0a0805;padding:7px 22px;border-radius:4px;font-size:10px;letter-spacing:.12em;cursor:pointer;font-weight:700}
+#studio-hint{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.18);font-size:10px;letter-spacing:.1em;pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+
+/* ── PRESENTATION ── */
+#pres-screen{flex-direction:column}
+#pres-bar{padding:10px 18px;border-bottom:1px solid #1a1a1a;display:flex;gap:10px;align-items:center;flex-shrink:0}
+.pbar-btn{background:transparent;border:1px solid #1a1a1a;color:#333;padding:6px 12px;border-radius:4px;font-size:10px;cursor:pointer;transition:all .15s}
+.pbar-btn:hover{border-color:#2a2a2a;color:#555}
+#pres-main-btn{background:#c8a96e;border:none;color:#0a0805;padding:6px 16px;border-radius:4px;font-size:10px;letter-spacing:.12em;cursor:pointer;font-weight:700}
+#pres-compare{flex:1;display:flex;min-height:0}
+.pside{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;position:relative;padding:20px}
+#pres-divider{width:1px;background:#1a1a1a;flex-shrink:0}
+.pside-label{position:absolute;top:14px;left:14px;font-size:9px;letter-spacing:.2em}
+.pside-img{max-width:100%;max-height:calc(100vh - 290px);border-radius:6px;object-fit:contain}
+.pside-ph{width:280px;height:190px;border-radius:6px;background:linear-gradient(180deg,#0d0d0d,#151515)}
+#pres-footer{background:#050505;border-top:1px solid #1a1a1a;padding:12px 20px;flex-shrink:0}
+#pres-footer p{color:#1e1e1e;font-size:9px;letter-spacing:.15em;margin-bottom:10px}
+#pres-palette{display:flex;gap:10px;flex-wrap:wrap}
+.pswatch{display:flex;align-items:center;gap:7px}
+.pswatch-dot{width:22px;height:22px;border-radius:4px;border:1px solid #1a1a1a}
+.pswatch span{color:#2a2a2a;font-size:9px}
+#restart-btn{position:absolute;bottom:16px;right:16px;background:transparent;border:1px solid #1a1a1a;color:#1e1e1e;padding:5px 12px;border-radius:3px;font-size:9px;letter-spacing:.1em;cursor:pointer}
+#restart-btn:hover{border-color:#2a2a2a;color:#333}
+
+/* AI BUBBLE */
+#ai-bubble{position:fixed;bottom:16px;right:16px;background:#0c0c0c;border:1px solid #1a1a1a;border-radius:7px;padding:9px 12px;max-width:210px;box-shadow:0 4px 20px rgba(0,0,0,.6);z-index:200}
+#aib-head{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+#aib-dot{width:5px;height:5px;border-radius:50%;background:#c8a96e;animation:scanPulse 2s infinite}
+#aib-head span{color:#c8a96e60;font-size:8px;letter-spacing:.18em}
+#aib-text{color:#2e2e2e;font-size:9px;line-height:1.55}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="topbar">
+  <div id="logo">
+    <div id="logo-grid"><div></div><div></div><div></div><div></div></div>
+    <span id="logo-name">KABINETT</span>
+  </div>
+  <div id="stepper"></div>
+  <div id="ai-status"><div class="ai-dot"></div><span>AI AKTİF</span></div>
+</div>
+
+<div id="main">
+
+<!-- 1. SCAN -->
+<div id="scan-screen" class="screen active">
+  <div id="dropzone"
+    ondragover="event.preventDefault();this.classList.add('dragover')"
+    ondragleave="this.classList.remove('dragover')"
+    ondrop="handleDrop(event)"
+    onclick="document.getElementById('file-input').click()">
+    <div id="drop-idle">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <p>FOTOĞRAF YÜKLE</p>
+      <small>sürükle &amp; bırak veya tıkla · JPG, PNG</small>
+    </div>
+    <img id="scan-photo" alt="mutfak">
+    <div id="scan-overlay">
+      <div id="scan-line"></div>
+      <div id="scan-labels"></div>
+      <div id="scan-boxes"></div>
+      <div id="scan-legend">
+        <div class="leg"><div class="leg-box" style="border-color:#3b82f6"></div><span>Alt</span></div>
+        <div class="leg"><div class="leg-box" style="border-color:#22c55e"></div><span>Üst</span></div>
+        <div class="leg"><div class="leg-box" style="border-color:#f97316"></div><span>Ankastre</span></div>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="file-input" accept="image/*" onchange="handleFileInput(event)">
+  <div id="scan-actions">
+    <button id="scan-upload-btn" onclick="document.getElementById('file-input').click()">📁 Dosya Seç</button>
+    <button id="scan-next-btn" onclick="goTo(1)">DEVAM ET →</button>
+  </div>
+  <p id="scan-hint">Gerçek mutfak fotoğrafı yükleyin veya sürükleyin</p>
+</div>
+
+<!-- 2. EDIT -->
+<div id="edit-screen" class="screen">
+  <div id="tool-panel">
+    <div>
+      <button class="tbtn active" id="tool-select" onclick="setTool('select',this)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-7 1-4 7z"/></svg>
+      </button>
+      <div class="ttip">SEÇ</div>
+    </div>
+    <div>
+      <button class="tbtn" id="tool-add" onclick="setTool('add',this)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      </button>
+      <div class="ttip">EKLE</div>
+    </div>
+    <div>
+      <button class="tbtn" onclick="deleteSelected()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      </button>
+      <div class="ttip">SİL</div>
+    </div>
+  </div>
+  <div id="edit-canvas-wrap" onclick="handleCanvasClick(event)">
+    <div id="edit-img-container">
+      <img id="edit-photo" class="placeholder" alt="">
+      <div id="edit-bboxes"></div>
+    </div>
+    <div id="add-hint">Kapak eklemek için tıklayın</div>
+  </div>
+  <div id="prop-panel">
+    <p id="prop-head">ÖZELLİKLER</p>
+    <div id="prop-empty">Bir kapak seçin<br>veya "Ekle" ile<br>yeni kapak ekleyin.</div>
+    <div id="prop-detail">
+      <div class="pfield">
+        <div class="plabel">TÜR</div>
+        <select class="pselect" id="prop-type" onchange="updateProp('type',this.value)">
+          <option value="Alt">Alt Dolap</option>
+          <option value="Üst">Üst Dolap</option>
+          <option value="Ankastre">Ankastre</option>
+        </select>
+      </div>
+      <div class="pfield">
+        <div class="plabel">GENİŞLİK (cm)</div>
+        <input class="pinput" id="prop-w" type="number" min="10" max="300" onchange="updateProp('w',this.value)">
+      </div>
+      <div class="pfield">
+        <div class="plabel">YÜKSEKLİK (cm)</div>
+        <input class="pinput" id="prop-h" type="number" min="10" max="300" onchange="updateProp('h',this.value)">
+      </div>
+      <div class="pfield">
+        <div class="plabel">KAPI SAYISI</div>
+        <div id="door-count-row">
+          <button class="dc-btn" onclick="changeDoors(-1)">−</button>
+          <span id="door-count-val">1</span>
+          <button class="dc-btn" onclick="changeDoors(1)">+</button>
+        </div>
+      </div>
+      <div class="pfield">
+        <div class="plabel">MENTEŞEsince YÖNÜ</div>
+        <select class="pselect" id="prop-hinge" onchange="updateProp('hinge',this.value)">
+          <option value="Sol">Sol</option>
+          <option value="Sağ">Sağ</option>
+          <option value="İki Yön">İki Yön</option>
+          <option value="—">—</option>
+        </select>
+      </div>
+    </div>
+    <button id="edit-next-btn" onclick="goTo(2)">İLERLE →</button>
+  </div>
+</div>
+
+<!-- 3. MATERIAL -->
+<div id="mat-screen" class="screen">
+  <div id="mat-preview">
+    <div id="mat-photo-wrap">
+      <img id="mat-photo" class="placeholder" alt="">
+    </div>
+    <div id="mat-badge">
+      <div id="mat-badge-dot" style="background:#2a2a2a"></div>
+      <span id="mat-badge-name">Renk seçilmedi</span>
+    </div>
+  </div>
+  <div id="mat-drawer">
+    <div id="mat-tabs-row">
+      <button class="mtab active" onclick="setMatTab(this,'Kapak')">Kapak</button>
+      <button class="mtab" onclick="setMatTab(this,'Gövde')">Gövde</button>
+      <button class="mtab" onclick="setMatTab(this,'Tezgah')">Tezgah</button>
+      <button class="mtab" onclick="setMatTab(this,'Kulp')">Kulp</button>
+      <button class="mtab" onclick="setMatTab(this,'Duvar')">Duvar</button>
+      <button id="mat-go-btn" onclick="goTo(3)">İLERLE →</button>
+    </div>
+    <div id="mat-bottom-row">
+      <div id="mat-spheres-wrap"><div id="mat-spheres"></div></div>
+      <div id="rgb-panel">
+        <div id="rgb-panel-title">ÖZEL RENK — RGB</div>
+        <div id="rgb-preview-bar"></div>
+        <div class="rgb-row">
+          <span class="rgb-letter rgb-r-l">R</span>
+          <input type="range" class="rgb-slider rgb-r-s" id="rgb-r" min="0" max="255" value="100" oninput="updateRGB()">
+          <span class="rgb-num" id="rgb-r-num">100</span>
+        </div>
+        <div class="rgb-row">
+          <span class="rgb-letter rgb-g-l">G</span>
+          <input type="range" class="rgb-slider rgb-g-s" id="rgb-g" min="0" max="255" value="80" oninput="updateRGB()">
+          <span class="rgb-num" id="rgb-g-num">80</span>
+        </div>
+        <div class="rgb-row">
+          <span class="rgb-letter rgb-b-l">B</span>
+          <input type="range" class="rgb-slider rgb-b-s" id="rgb-b" min="0" max="255" value="60" oninput="updateRGB()">
+          <span class="rgb-num" id="rgb-b-num">60</span>
+        </div>
+        <div id="rgb-hex-row">
+          <span id="rgb-hash">#</span>
+          <input type="text" id="rgb-hex-input" maxlength="6" value="64503C" oninput="hexToRGB(this.value)">
+          <button id="rgb-apply-btn" onclick="applyRGBColor()">UYGULA</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. ANALYSIS -->
+<div id="ana-screen" class="screen">
+  <div id="ana-left">
+    <div id="ana-photo-wrap">
+      <img id="ana-photo" class="placeholder" alt="">
+    </div>
+  </div>
+  <div id="ana-right">
+    <div id="ana-thead"><span>KESİM LİSTESİ</span><span id="ana-count">0 adet</span></div>
+    <div id="ana-cols"><span>#</span><span>TÜR</span><span>ÖLÇÜ</span><span>KAPI</span><span>MENTEŞEsince</span><span></span></div>
+    <div id="ana-tbody"></div>
+    <div id="ana-warn">⚠ Çarpışma riski tespit edildi.<br>Menteşe yönünü kontrol edin.</div>
+    <button id="ana-next-btn" onclick="goTo(4)">3D STÜDYOYA GEÇ →</button>
+  </div>
+</div>
+
+<!-- 5. STUDIO -->
+<div id="studio-screen" class="screen">
+  <div id="studio-viewport">
+    <img id="studio-photo-bg" class="placeholder" alt="">
+    <div id="studio-overlay-wrap">
+      <!-- cabinet overlays injected by JS here -->
+      <div id="studio-light-overlay"></div>
+    </div>
+    <p id="studio-hint">KAPILARI AÇ / KAPAT</p>
+  </div>
+  <div id="studio-controls">
+    <button class="sctrl on" id="sctrl-warm" onclick="setLight('warm')">☀ GÜNIŞIĞI</button>
+    <button class="sctrl" id="sctrl-cold" onclick="setLight('cold')">💡 MAĞAZA</button>
+    <button class="sctrl" id="sctrl-door" onclick="toggleDoors()">🚪 KAPILARI AÇ</button>
+    <button id="studio-next-btn" onclick="goTo(5)">SUNUM →</button>
+  </div>
+</div>
+
+<!-- 6. PRESENTATION -->
+<div id="pres-screen" class="screen">
+  <div id="pres-bar">
+    <button id="pres-main-btn">TAM EKRAN SUNUM</button>
+    <button class="pbar-btn">📄 PDF Raporu</button>
+    <button class="pbar-btn">📱 WhatsApp</button>
+    <button class="pbar-btn">✉ E-posta</button>
+  </div>
+  <div id="pres-compare">
+    <div class="pside">
+      <span class="pside-label" style="color:#2a2a2a">ÖNCE</span>
+      <img id="pres-before" class="pside-img pside-ph" alt="">
+      <span style="color:#1e1e1e;font-size:10px">Orijinal fotoğraf</span>
+    </div>
+    <div id="pres-divider"></div>
+    <div class="pside" style="background:#060606">
+      <span class="pside-label" style="color:#c8a96e70">SONRA</span>
+      <div style="position:relative">
+        <img id="pres-after" class="pside-img pside-ph" alt="" style="background:linear-gradient(180deg,#0a0a10,#141420)">
+        <div id="pres-overlay" style="position:absolute;inset:0;border-radius:6px;pointer-events:none"></div>
+      </div>
+      <span id="pres-mat-label" style="color:#c8a96e;font-size:10px">—</span>
+    </div>
+  </div>
+  <div id="pres-footer">
+    <p>SEÇİLEN MALZEMELER</p>
+    <div id="pres-palette"></div>
+  </div>
+  <button id="restart-btn" onclick="goTo(0)">YENİDEN BAŞLA</button>
+</div>
+
+</div>
+
+<div id="ai-bubble">
+  <div id="aib-head"><div id="aib-dot"></div><span>AI ASISTAN</span></div>
+  <p id="aib-text">Mutfak fotoğrafını yükleyin.</p>
+</div>
+
+</div>
+<script>
+/* ── STATE ── */
+const STEPS=["Tara & Yükle","2D Düzenle","Stil & Malzeme","Analiz","3D Stüdyo","Sunum"];
+const TIPS=["Mutfak fotoğrafınızı yükleyin.","Kapakları seçip düzenleyin. Kapı sayısını +/− ile ayarlayın.","Hazır renk veya RGB sliderdan özel renk seçin, Uygula'ya basın.","! işaretli satırlarda çarpışma riski var.","Sürükleyerek 3D modeli döndürün.","PDF raporu veya paylaşım seçin."];
+let step=0, imgURL=null, cabs=[], selId=null, tool='select', cabCtr=0;
+let matHistory=[], activeMat={color:'#2e2e2e',name:'Antrasit Mat',shine:false};
+let stRot=25, dragging=false, lastX=0, doorsOpen=false;
+
+const PRESETS=[
+  {name:'Antrasit Mat',color:'#2e2e2e',shine:false},
+  {name:'Parlak Beyaz',color:'#f0efe8',shine:true},
+  {name:'Doğal Meşe',color:'#8B6914',shine:false},
+  {name:'Gri Beton',color:'#6b7280',shine:false},
+  {name:'Navy Blue',color:'#1e3a5f',shine:true},
+  {name:'Sage Yeşil',color:'#5c7a5c',shine:false},
+  {name:'Terracotta',color:'#c4622d',shine:false},
+  {name:'Krem',color:'#d4c9a8',shine:false},
+  {name:'Siyah Mat',color:'#111111',shine:false},
+  {name:'Bronz',color:'#8c6239',shine:true},
+];
+
+/* ── STEPPER ── */
+function buildStepper(){
+  const el=document.getElementById('stepper');
+  el.innerHTML='';
+  STEPS.forEach((s,i)=>{
+    const done=i<step, active=i===step;
+    const d=document.createElement('div');
+    d.className='si';
+    d.innerHTML=`<button class="sb ${i>step?'locked':''}" ${i<=step?'onclick="goTo('+i+')"':''}>
+      <div class="sdot" style="background:${done?'#c8a96e':'transparent'};border:${active?'1px solid #c8a96e':done?'none':'1px solid #1e1e1e'}">
+        ${done?'<span style="color:#0a0805;font-size:8px">✓</span>':`<span style="color:${active?'#c8a96e':'#1e1e1e'};font-size:8px">${i+1}</span>`}
+      </div>
+      <span class="slabel" style="color:${active?'#c8a96e':done?'#3a3a3a':'#1a1a1a'}">${s}</span>
+    </button>${i<STEPS.length-1?`<div class="sline" style="background:${done?'#c8a96e28':'#141414'}"></div>`:''}`;
+    el.appendChild(d);
+  });
+}
+
+function goTo(n){
+  step=n;
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  ['scan-screen','edit-screen','mat-screen','ana-screen','studio-screen','pres-screen'].forEach((id,i)=>{
+    if(i===n)document.getElementById(id).classList.add('active');
+  });
+  document.getElementById('aib-text').textContent=TIPS[n];
+  buildStepper();
+  if(n===1){syncImg('edit-photo');renderBBoxes();}
+  if(n===2){syncImg('mat-photo');buildMatSpheres();syncMatOverlays();updateRGB();}
+  if(n===3){syncImg('ana-photo');renderAnaOverlays();buildAnaTable();}
+  if(n===4)buildStudioModel();
+  if(n===5)buildPres();
+}
+
+/* ── UPLOAD ── */
+function handleFileInput(e){const f=e.target.files[0];if(f)loadImg(f);}
+function handleDrop(e){e.preventDefault();document.getElementById('dropzone').classList.remove('dragover');const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))loadImg(f);}
+function loadImg(file){
+  const r=new FileReader();
+  r.onload=ev=>{
+    imgURL=ev.target.result;
+    const p=document.getElementById('scan-photo');
+    p.src=imgURL;p.style.display='block';
+    document.getElementById('drop-idle').style.display='none';
+    runScan();
+  };
+  r.readAsDataURL(file);
+}
+
+function runScan(){
+  const ov=document.getElementById('scan-overlay'),line=document.getElementById('scan-line');
+  const lbls=document.getElementById('scan-labels'),boxes=document.getElementById('scan-boxes');
+  ov.style.display='block';line.style.display='block';line.style.top='0%';
+  lbls.innerHTML='';boxes.innerHTML='';
+  document.getElementById('scan-legend').style.display='none';
+  document.getElementById('scan-next-btn').style.display='none';
+  document.getElementById('scan-hint').textContent='AI tarama yapılıyor...';
+  const msgs=["Perspektif düzeltiliyor...","Dolaplar algılanıyor...","Zemin kotu belirleniyor...","Bounding box çiziliyor..."];
+  msgs.forEach((m,i)=>setTimeout(()=>{const d=document.createElement('div');d.className='slbl';d.textContent=m;lbls.appendChild(d);},(i+1)*600));
+  let pct=0;
+  const iv=setInterval(()=>{
+    pct+=2.2;line.style.top=Math.min(pct,100)+'%';
+    if(pct>=100){clearInterval(iv);setTimeout(()=>{
+      line.style.display='none';
+      drawScanBoxes();
+      document.getElementById('scan-legend').style.display='flex';
+      document.getElementById('scan-next-btn').style.display='inline-block';
+      document.getElementById('scan-hint').textContent='Algılama tamamlandı. Devam edin veya düzenleyin.';
+      initCabs();
+    },300);}
+  },28);
+}
+
+function drawScanBoxes(){
+  const el=document.getElementById('scan-boxes');
+  const demo=[
+    {x:'3%',y:'52%',w:'17%',h:'36%',t:'alt'},{x:'21%',y:'52%',w:'20%',h:'36%',t:'alt'},
+    {x:'42%',y:'52%',w:'17%',h:'36%',t:'alt'},{x:'60%',y:'52%',w:'15%',h:'36%',t:'alt'},
+    {x:'3%',y:'12%',w:'17%',h:'28%',t:'ust'},{x:'21%',y:'12%',w:'20%',h:'28%',t:'ust'},
+    {x:'42%',y:'12%',w:'17%',h:'28%',t:'ust'},{x:'76%',y:'12%',w:'15%',h:'28%',t:'ankastre'},
+  ];
+  const clr={alt:'#3b82f6',ust:'#22c55e',ankastre:'#f97316'};
+  const lbl={alt:'Alt',ust:'Üst',ankastre:'Ankastre'};
+  demo.forEach(b=>{
+    const d=document.createElement('div');d.className='bbox';
+    d.style.cssText=`left:${b.x};top:${b.y};width:${b.w};height:${b.h};border-color:${clr[b.t]};box-shadow:0 0 6px ${clr[b.t]}40`;
+    d.innerHTML=`<span class="bbox-label" style="background:${clr[b.t]}18;color:${clr[b.t]};border:1px solid ${clr[b.t]}40">${lbl[b.t]||b.t}</span>`;
+    el.appendChild(d);
+  });
+}
+
+function initCabs(){
+  cabs=[
+    {id:++cabCtr,type:'Alt',w:60,h:72,doors:1,hinge:'Sol',warning:false,x:3,y:52,pw:17,ph:36},
+    {id:++cabCtr,type:'Alt',w:80,h:72,doors:2,hinge:'Sağ',warning:false,x:21,y:52,pw:20,ph:36},
+    {id:++cabCtr,type:'Alt',w:60,h:72,doors:1,hinge:'Sol',warning:false,x:42,y:52,pw:17,ph:36},
+    {id:++cabCtr,type:'Alt',w:45,h:72,doors:1,hinge:'Sol',warning:false,x:60,y:52,pw:15,ph:36},
+    {id:++cabCtr,type:'Üst',w:60,h:35,doors:1,hinge:'Sol',warning:true, x:3,y:12,pw:17,ph:28},
+    {id:++cabCtr,type:'Üst',w:80,h:35,doors:2,hinge:'Sağ',warning:false,x:21,y:12,pw:20,ph:28},
+    {id:++cabCtr,type:'Üst',w:60,h:35,doors:1,hinge:'Sol',warning:false,x:42,y:12,pw:17,ph:28},
+    {id:++cabCtr,type:'Ankastre',w:60,h:60,doors:1,hinge:'—',warning:false,x:76,y:12,pw:15,ph:28},
+  ];
+}
+
+/* ── EDIT ── */
+function syncImg(id){
+  const el=document.getElementById(id);
+  if(imgURL){el.src=imgURL;el.classList.remove('placeholder');el.style.background='';}
+}
+
+// Drag state for move/resize
+let dragState=null;
+
+function getContainerRect(){return document.getElementById('edit-img-container').getBoundingClientRect();}
+
+function renderBBoxes(){
+  const c=document.getElementById('edit-bboxes');c.innerHTML='';
+  const clr={Alt:'#3b82f6',Ust:'#22c55e',Ankastre:'#f97316'};
+  const typeClr=cab=>clr[cab.type]||clr['Ust']||'#888';
+  cabs.forEach(cab=>{
+    const bc=typeClr(cab);
+    const d=document.createElement('div');d.className='edit-bbox';d.id='eb-'+cab.id;
+    d.style.cssText='left:'+cab.x+'%;top:'+cab.y+'%;width:'+cab.pw+'%;height:'+cab.ph+'%;border-color:'+bc+(selId===cab.id?'':'60')+';cursor:move';
+    if(selId===cab.id){
+      d.classList.add('selected');
+      // Label
+      const lbl=document.createElement('div');
+      lbl.style.cssText='position:absolute;top:-22px;left:0;background:'+bc+';color:#000;font-size:8px;padding:2px 6px;border-radius:2px;letter-spacing:.05em;white-space:nowrap;pointer-events:none;font-family:inherit';
+      lbl.textContent=cab.type+' · '+cab.w+'×'+cab.h+'cm · '+cab.doors+'K';
+      d.appendChild(lbl);
+      // 8 resize handles
+      [['nw','top:-5px;left:-5px;cursor:nw-resize'],['n','top:-5px;left:calc(50% - 5px);cursor:n-resize'],
+       ['ne','top:-5px;right:-5px;cursor:ne-resize'],['e','top:calc(50% - 5px);right:-5px;cursor:e-resize'],
+       ['se','bottom:-5px;right:-5px;cursor:se-resize'],['s','bottom:-5px;left:calc(50% - 5px);cursor:s-resize'],
+       ['sw','bottom:-5px;left:-5px;cursor:sw-resize'],['w','top:calc(50% - 5px);left:-5px;cursor:w-resize']
+      ].forEach(([hname,pos])=>{
+        const h=document.createElement('div');
+        h.style.cssText='position:absolute;width:10px;height:10px;background:#c8a96e;border:1px solid #0a0805;border-radius:2px;z-index:10;'+pos;
+        h.addEventListener('mousedown',ev=>{ev.stopPropagation();ev.preventDefault();
+          dragState={cabId:cab.id,mode:'resize',handle:hname,startX:ev.clientX,startY:ev.clientY,orig:{...cab}};
+        });
+        d.appendChild(h);
+      });
+    }
+    d.addEventListener('mousedown',ev=>{
+      if(ev.target!==d)return;
+      ev.stopPropagation();ev.preventDefault();
+      selectCab(cab.id);
+      dragState={cabId:cab.id,mode:'move',startX:ev.clientX,startY:ev.clientY,orig:{...cab}};
+    });
+    c.appendChild(d);
+  });
+  document.getElementById('add-hint').style.display=tool==='add'?'block':'none';
+}
+
+document.addEventListener('mousemove',function(ev){
+  if(!dragState)return;
+  const rect=getContainerRect();
+  const dx=((ev.clientX-dragState.startX)/rect.width)*100;
+  const dy=((ev.clientY-dragState.startY)/rect.height)*100;
+  const cab=cabs.find(c=>c.id===dragState.cabId);if(!cab)return;
+  const o=dragState.orig;
+  if(dragState.mode==='move'){
+    cab.x=Math.max(0,Math.min(100-o.pw,o.x+dx));
+    cab.y=Math.max(0,Math.min(100-o.ph,o.y+dy));
+  } else {
+    const h=dragState.handle;
+    let nx=o.x,ny=o.y,npw=o.pw,nph=o.ph;
+    if(h.includes('e')){npw=Math.max(4,o.pw+dx);}
+    if(h.includes('s')){nph=Math.max(4,o.ph+dy);}
+    if(h.includes('w')){const nw=Math.max(4,o.pw-dx);nx=o.x+o.pw-nw;npw=nw;}
+    if(h.includes('n')){const nh=Math.max(4,o.ph-dy);ny=o.y+o.ph-nh;nph=nh;}
+    cab.x=Math.max(0,Math.min(100-npw,nx));
+    cab.y=Math.max(0,Math.min(100-nph,ny));
+    cab.pw=Math.max(4,Math.min(npw,100-cab.x));
+    cab.ph=Math.max(4,Math.min(nph,100-cab.y));
+  }
+  const el=document.getElementById('eb-'+cab.id);
+  if(el){el.style.left=cab.x+'%';el.style.top=cab.y+'%';el.style.width=cab.pw+'%';el.style.height=cab.ph+'%';}
+});
+
+document.addEventListener('mouseup',function(){
+  if(!dragState)return;
+  dragState=null;
+  renderBBoxes();
+});
+
+function setTool(name,btn){
+  tool=name;
+  document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('add-hint').style.display=name==='add'?'block':'none';
+  if(name!=='select'){selId=null;showEmpty();renderBBoxes();}
+}
+
+function handleCanvasClick(e){
+  if(tool==='select'){
+    if(e.target===document.getElementById('edit-bboxes')||e.target===document.getElementById('edit-img-container')||e.target===document.getElementById('edit-photo')){
+      selId=null;showEmpty();renderBBoxes();
+    }
+    return;
+  }
+  if(tool!=='add')return;
+  const wrap=document.getElementById('edit-img-container');
+  const r=wrap.getBoundingClientRect();
+  const xp=Math.max(0,Math.round(((e.clientX-r.left)/r.width)*100));
+  const yp=Math.max(0,Math.round(((e.clientY-r.top)/r.height)*100));
+  const nc={id:++cabCtr,type:'Alt',w:60,h:72,doors:1,hinge:'Sol',warning:false,x:Math.max(0,Math.min(xp-8,82)),y:Math.max(0,Math.min(yp-13,74)),pw:16,ph:25};
+  cabs.push(nc);renderBBoxes();selectCab(nc.id);
+  setTool('select',document.getElementById('tool-select'));
+}
+
+function selectCab(id){
+  selId=id;renderBBoxes();
+  const cab=cabs.find(c=>c.id===id);if(!cab)return;
+  document.getElementById('prop-empty').style.display='none';
+  document.getElementById('prop-detail').style.display='block';
+  document.getElementById('prop-type').value=cab.type;
+  document.getElementById('prop-w').value=cab.w;
+  document.getElementById('prop-h').value=cab.h;
+  document.getElementById('door-count-val').textContent=cab.doors;
+  document.getElementById('prop-hinge').value=cab.hinge;
+}
+
+function showEmpty(){
+  document.getElementById('prop-empty').style.display='block';
+  document.getElementById('prop-detail').style.display='none';
+}
+
+function updateProp(k,v){
+  if(!selId)return;
+  const cab=cabs.find(c=>c.id===selId);if(!cab)return;
+  if(k==='type')cab.type=v;
+  if(k==='w')cab.w=Math.max(10,parseInt(v)||cab.w);
+  if(k==='h')cab.h=Math.max(10,parseInt(v)||cab.h);
+  if(k==='hinge')cab.hinge=v;
+  renderBBoxes();
+}
+
+function changeDoors(d){
+  if(!selId)return;
+  const cab=cabs.find(c=>c.id===selId);if(!cab)return;
+  cab.doors=Math.max(1,Math.min(6,(cab.doors||1)+d));
+  document.getElementById('door-count-val').textContent=cab.doors;
+}
+
+function deleteSelected(){
+  if(!selId)return;
+  cabs=cabs.filter(c=>c.id!==selId);selId=null;showEmpty();renderBBoxes();
+}
+
+/* ── MATERIAL ── */
+function syncMatOverlays(){
+  document.querySelectorAll('.mat-cab-overlay').forEach(e=>e.remove());
+  if(!imgURL)return;
+  const wrap=document.getElementById('mat-photo-wrap');
+  const img=document.getElementById('mat-photo');
+  cabs.forEach(cab=>{
+    if(!cab.matColor)return;
+    const d=document.createElement('div');
+    d.className='mat-cab-overlay';
+    d.style.cssText=`left:${cab.x}%;top:${cab.y}%;width:${cab.pw}%;height:${cab.ph}%;background:${cab.matColor};opacity:.7`;
+    if(cab.matShine)d.style.boxShadow='inset 0 0 20px rgba(255,255,255,.18)';
+    wrap.appendChild(d);
+  });
+}
+
+function buildMatSpheres(){
+  const c=document.getElementById('mat-spheres');c.innerHTML='';
+  PRESETS.forEach((m,i)=>{
+    const isSel=activeMat.color===m.color;
+    const w=document.createElement('div');w.className='msphere-wrap';
+    const bg=m.shine?`radial-gradient(circle at 28% 26%,rgba(255,255,255,.38),transparent 52%),${m.color}`:m.color;
+    w.innerHTML=`<div class="msphere" style="background:${bg};${isSel?'box-shadow:0 0 0 2px #c8a96e,0 4px 14px '+m.color+'60;transform:scale(1.1)':'box-shadow:0 3px 9px rgba(0,0,0,.5)'}"></div>
+    <span class="msname" style="color:${isSel?'#c8a96e':'#2a2a2a'}">${m.name}</span>`;
+    w.onclick=()=>applyMat(m.color,m.shine,m.name);
+    c.appendChild(w);
+  });
+}
+
+function applyMat(color,shine,name){
+  activeMat={color,shine:shine||false,name};
+  cabs.forEach(c=>{c.matColor=color;c.matShine=shine||false;});
+  document.getElementById('mat-badge-dot').style.background=color;
+  document.getElementById('mat-badge-name').textContent=name;
+  syncMatOverlays();buildMatSpheres();
+  hexFromColor(color);
+  if(!matHistory.find(m=>m.color===color)){matHistory.push({color,name});if(matHistory.length>8)matHistory.shift();}
+}
+
+function setMatTab(btn){
+  document.querySelectorAll('.mtab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+/* RGB */
+function toHex(n){return Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,'0')}
+function rgbToHex(r,g,b){return toHex(r)+toHex(g)+toHex(b);}
+
+function updateRGB(){
+  const r=+document.getElementById('rgb-r').value;
+  const g=+document.getElementById('rgb-g').value;
+  const b=+document.getElementById('rgb-b').value;
+  document.getElementById('rgb-r-num').textContent=r;
+  document.getElementById('rgb-g-num').textContent=g;
+  document.getElementById('rgb-b-num').textContent=b;
+  const hex=rgbToHex(r,g,b);
+  document.getElementById('rgb-hex-input').value=hex.toUpperCase();
+  document.getElementById('rgb-preview-bar').style.background=`#${hex}`;
+}
+
+function hexToRGB(hex){
+  hex=hex.replace('#','');
+  if(hex.length!==6)return;
+  const r=parseInt(hex.substr(0,2),16);
+  const g=parseInt(hex.substr(2,2),16);
+  const b=parseInt(hex.substr(4,2),16);
+  if(isNaN(r)||isNaN(g)||isNaN(b))return;
+  document.getElementById('rgb-r').value=r;
+  document.getElementById('rgb-g').value=g;
+  document.getElementById('rgb-b').value=b;
+  document.getElementById('rgb-r-num').textContent=r;
+  document.getElementById('rgb-g-num').textContent=g;
+  document.getElementById('rgb-b-num').textContent=b;
+  document.getElementById('rgb-preview-bar').style.background=`#${hex}`;
+}
+
+function hexFromColor(c){
+  const h=c.replace('#','');
+  document.getElementById('rgb-hex-input').value=h.toUpperCase();
+  hexToRGB(h);
+}
+
+function applyRGBColor(){
+  const hex=document.getElementById('rgb-hex-input').value.replace('#','').replace(/[^0-9a-fA-F]/g,'');
+  if(hex.length!==6){alert('Geçerli bir 6 haneli HEX kodu girin.');return;}
+  const name='#'+hex.toUpperCase();
+  applyMat('#'+hex,false,name);
+}
+
+/* ── ANALYSIS ── */
+function renderAnaOverlays(){
+  document.querySelectorAll('.ana-cab-hl').forEach(e=>e.remove());
+  const wrap=document.getElementById('ana-photo-wrap');
+  cabs.forEach(cab=>{
+    const d=document.createElement('div');d.className='ana-cab-hl';d.id='aov-'+cab.id;
+    d.style.cssText=`left:${cab.x}%;top:${cab.y}%;width:${cab.pw}%;height:${cab.ph}%`;
+    d.onclick=()=>selectAna(cab.id);
+    wrap.appendChild(d);
+  });
+}
+
+function buildAnaTable(){
+  document.getElementById('ana-count').textContent=cabs.length+' adet';
+  const tb=document.getElementById('ana-tbody');tb.innerHTML='';
+  cabs.forEach(cab=>{
+    const d=document.createElement('div');d.className='arow';d.id='ar-'+cab.id;d.onclick=()=>selectAna(cab.id);
+    d.innerHTML=`<span class="c0">${cab.id}</span><span class="c1">${cab.type}</span><span class="c2">${cab.w}×${cab.h}</span><span class="c3">${cab.doors}</span><span class="c4">${cab.hinge}</span><span class="c5">${cab.warning?'!':''}</span>`;
+    tb.appendChild(d);
+  });
+}
+
+function selectAna(id){
+  document.querySelectorAll('.arow').forEach(r=>r.classList.remove('sel'));
+  document.querySelectorAll('.ana-cab-hl').forEach(c=>{c.classList.remove('hl');});
+  const row=document.getElementById('ar-'+id);if(row)row.classList.add('sel');
+  const ov=document.getElementById('aov-'+id);if(ov)ov.classList.add('hl');
+  const cab=cabs.find(c=>c.id===id);
+  document.getElementById('ana-warn').style.display=(cab&&cab.warning)?'block':'none';
+  if(row)row.scrollIntoView({block:'nearest'});
+}
+
+/* ── STUDIO (photo-overlay mode) ── */
+function buildStudioModel(){
+  const bg=document.getElementById('studio-photo-bg');
+  if(imgURL){bg.src=imgURL;bg.classList.remove('placeholder');bg.style.background='';}
+
+  // Remove old overlays but keep the light overlay div
+  const wrap=document.getElementById('studio-overlay-wrap');
+  Array.from(wrap.children).forEach(ch=>{if(ch.id!=='studio-light-overlay')ch.remove();});
+
+  if(!cabs.length)return;
+
+  const matC=activeMat.color||'#2e2e2e';
+  const shine=activeMat.shine||false;
+
+  // We need the image to be rendered to get its displayed size.
+  // Use a tiny delay if image not loaded yet.
+  function renderOverlays(){
+    // Remove old overlays again (in case called twice)
+    Array.from(wrap.children).forEach(ch=>{if(ch.id!=='studio-light-overlay')ch.remove();});
+
+    // The photo sits centered in #studio-viewport via flex
+    // We overlay divs using the same % coords as the bboxes
+    cabs.forEach(cab=>{
+      const ov=document.createElement('div');
+      ov.className='sov-cab';
+      ov.id='sov-'+cab.id;
+      // Position matches bbox percentages relative to the image
+      // We'll use position absolute with same % as edit bboxes
+      // but we need them relative to the overlay-wrap which covers the full viewport
+      // So we need to convert cab.x/y (% of image) to % of viewport
+      // We'll do this after image renders — stored in sov data attrs
+      ov.dataset.cx=cab.x; ov.dataset.cy=cab.y;
+      ov.dataset.cpw=cab.pw; ov.dataset.cph=cab.ph;
+      ov.dataset.doors=cab.doors;
+
+      const inner=document.createElement('div');
+      inner.className='sov-cab-inner';
+
+      // Door panels
+      const dc=Math.max(1,Math.min(cab.doors,4));
+      const doorW=100/dc;
+      for(let d=0;d<dc;d++){
+        const door=document.createElement('div');
+        door.className='sov-door';
+        door.style.cssText='left:'+(d*doorW)+'%;width:'+doorW+'%;background:'+matC+';'
+          +(shine?'box-shadow:inset 0 0 20px rgba(255,255,255,.18);':'');
+        // handle
+        const handle=document.createElement('div');
+        handle.className='sov-handle';
+        // for 2-door cabinets mirror handle side
+        if(dc>1&&d===Math.floor(dc/2)){handle.style.right='auto';handle.style.left='8%';}
+        door.appendChild(handle);
+        inner.appendChild(door);
+      }
+      ov.appendChild(inner);
+      wrap.insertBefore(ov, document.getElementById('studio-light-overlay'));
+    });
+    positionOverlays();
+  }
+
+  if(imgURL&&bg.complete&&bg.naturalWidth){
+    renderOverlays();
+  } else if(imgURL){
+    bg.onload=renderOverlays;
+  } else {
+    renderOverlays();
+  }
+}
+
+function positionOverlays(){
+  const bg=document.getElementById('studio-photo-bg');
+  const vp=document.getElementById('studio-viewport');
+  const vpR=vp.getBoundingClientRect();
+
+  // Get the actual rendered size & position of the photo inside the viewport
+  let imgW,imgH,imgLeft,imgTop;
+  if(bg.naturalWidth&&bg.naturalHeight){
+    const nat=bg.naturalWidth/bg.naturalHeight;
+    const avW=vpR.width, avH=vpR.height;
+    if(avW/avH>nat){imgH=avH;imgW=avH*nat;}
+    else{imgW=avW;imgH=avW/nat;}
+    imgLeft=(avW-imgW)/2; imgTop=(avH-imgH)/2;
+  } else {
+    imgW=vpR.width;imgH=vpR.height;imgLeft=0;imgTop=0;
+  }
+
+  document.querySelectorAll('.sov-cab').forEach(ov=>{
+    const cx=parseFloat(ov.dataset.cx);
+    const cy=parseFloat(ov.dataset.cy);
+    const cpw=parseFloat(ov.dataset.cpw);
+    const cph=parseFloat(ov.dataset.cph);
+    const left=imgLeft+imgW*(cx/100);
+    const top=imgTop+imgH*(cy/100);
+    const w=imgW*(cpw/100);
+    const h=imgH*(cph/100);
+    ov.style.cssText='position:absolute;left:'+left+'px;top:'+top+'px;width:'+w+'px;height:'+h+'px;';
+  });
+}
+
+// Reposition on resize
+window.addEventListener('resize',()=>{
+  if(document.getElementById('studio-screen').classList.contains('active'))positionOverlays();
+});
+
+function setLight(mode){
+  const ov=document.getElementById('studio-light-overlay');
+  ov.style.background=mode==='warm'?'rgba(255,200,80,.08)':'rgba(100,160,255,.06)';
+  document.getElementById('sctrl-warm').classList.toggle('on',mode==='warm');
+  document.getElementById('sctrl-cold').classList.toggle('on',mode==='cold');
+}
+
+function toggleDoors(){
+  doorsOpen=!doorsOpen;
+  document.querySelectorAll('.sov-door').forEach((door,i)=>{
+    // Alternate open direction for multi-door cabinets
+    const idx=parseInt(door.parentElement.parentElement.dataset.doors)||1;
+    const dIdx=Array.from(door.parentElement.children).indexOf(door);
+    const openDir=dIdx<Math.ceil(idx/2)?-1:1;
+    if(doorsOpen){
+      door.style.transform='perspective(400px) rotateY('+(openDir*-72)+'deg)';
+    } else {
+      door.style.transform='none';
+    }
+  });
+  document.getElementById('sctrl-door').textContent=doorsOpen?'🚪 KAPILARI KAPAT':'🚪 KAPILARI AÇ';
+  document.getElementById('sctrl-door').classList.toggle('on',doorsOpen);
+}
+
+/* ── PRESENTATION ── */
+function buildPres(){
+  const setImg=(id,cls)=>{const el=document.getElementById(id);if(imgURL){el.src=imgURL;el.classList.remove(cls);el.style.background='';}};
+  setImg('pres-before','pside-ph');setImg('pres-after','pside-ph');
+  document.getElementById('pres-mat-label').textContent=activeMat.name;
+  const ov=document.getElementById('pres-overlay');
+  ov.style.background=activeMat.color?activeMat.color+'60':'transparent';
+
+  const p=document.getElementById('pres-palette');p.innerHTML='';
+  const show=matHistory.length?matHistory:PRESETS.slice(0,5);
+  show.slice(0,7).forEach(m=>{
+    const d=document.createElement('div');d.className='pswatch';
+    d.innerHTML=`<div class="pswatch-dot" style="background:${m.color}"></div><span>${m.name}</span>`;
+    p.appendChild(d);
+  });
+}
+
+/* ── INIT ── */
+buildStepper();
+updateRGB();
+</script>
+</body>
+</html>
