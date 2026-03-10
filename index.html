@@ -72,6 +72,7 @@ button{cursor:pointer;touch-action:manipulation}
 .leg span{font-size:8px;color:#999}
 #scan-hint{color:#252525;font-size:10px;letter-spacing:.06em;text-align:center}
 #scan-upload-row{display:flex;gap:10px;width:100%;max-width:520px}
+#scan-camera-btn{flex:1;background:transparent;border:1px solid #222;color:#555;padding:12px;border-radius:6px;font-size:11px;letter-spacing:.08em;min-height:44px}
 #scan-upload-btn{flex:1;background:transparent;border:1px solid #222;color:#555;padding:12px;border-radius:6px;font-size:11px;letter-spacing:.08em;min-height:44px}
 #scan-upload-btn:active{background:#111}
 #file-input{display:none}
@@ -106,7 +107,7 @@ button{cursor:pointer;touch-action:manipulation}
 .pinput:focus{border-color:#c8a96e40}
 .pselect{width:100%;background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:10px 12px;color:#c8a96e;font-size:14px;outline:none}
 .pselect option{background:#111}
-#door-count-row{display:flex;align-items:center;gap:10px}
+#door-count-row{display:flex;align-items:center;gap:10px;width:100%}
 .dc-btn{width:44px;height:44px;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#888;font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dc-btn:active{background:#1a1a1a;color:#c8a96e}
 #door-count-val{flex:1;text-align:center;color:#c8a96e;font-size:20px;font-weight:500}
@@ -279,10 +280,12 @@ button{cursor:pointer;touch-action:manipulation}
     </div>
     <p id="scan-hint">Mutfak fotoğrafı yükleyin</p>
     <div id="scan-upload-row">
-      <button id="scan-upload-btn" onclick="document.getElementById('file-input').click()">📁 Dosya Seç / Galeri</button>
+      <button id="scan-upload-btn" onclick="document.getElementById('file-input').click()">🖼 Galeri / Dosya</button>
+      <button id="scan-camera-btn" onclick="document.getElementById('camera-input').click()">📷 Kamera</button>
     </div>
   </div>
-  <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleFileInput(event)">
+  <input type="file" id="file-input" accept="image/*" onchange="handleFileInput(event)">
+  <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handleFileInput(event)" style="display:none">
   <div id="step-nav">
     <button class="nav-back" onclick="goTo(0)" style="visibility:hidden">GERİ</button>
     <button class="nav-next" id="scan-go-btn" onclick="goTo(1)" style="display:none">DEVAM ET →</button>
@@ -630,16 +633,36 @@ function renderBBoxes(){
         d.appendChild(h);
       });
     }
+    let lastTap=0;
     const startMove=ev=>{
       if(ev.target!==d)return;
       ev.stopPropagation();ev.preventDefault();
-      selectCab(cab.id);
+      // select without opening props
+      selId=cab.id;
+      const info=document.getElementById('edit-sel-info');
+      if(info)info.textContent=cab.type+' seçili';
       const p=ev.touches?ev.touches[0]:ev;
-      dragState={cabId:cab.id,mode:'move',startX:p.clientX,startY:p.clientY,orig:{...cab}};
+      dragState={cabId:cab.id,mode:'move',startX:p.clientX,startY:p.clientY,orig:{...cab},moved:false};
     };
     d.addEventListener('mousedown',startMove);
     d.addEventListener('touchstart',startMove,{passive:false});
-    d.addEventListener('click',ev=>{ev.stopPropagation();selectCab(cab.id);});
+    // single click on desktop selects, double click opens props
+    d.addEventListener('click',ev=>{
+      ev.stopPropagation();
+      const now=Date.now();
+      if(now-lastTap<350){selectCab(cab.id,true);} // double click
+      else{selectCab(cab.id,false);}               // single click
+      lastTap=now;
+    });
+    // touch: double tap opens props
+    d.addEventListener('touchend',ev=>{
+      ev.stopPropagation();
+      if(dragState&&dragState.moved)return; // was a drag, not a tap
+      const now=Date.now();
+      if(now-lastTap<350){selectCab(cab.id,true);}
+      else{selectCab(cab.id,false);}
+      lastTap=now;
+    });
     c.appendChild(d);
   });
   document.getElementById('add-hint').style.display=tool==='add'?'block':'none';
@@ -658,6 +681,7 @@ function applyDragMove(ev){
   const cab=cabs.find(c=>c.id===dragState.cabId);if(!cab)return;
   const o=dragState.orig;
   if(dragState.mode==='move'){
+    if(Math.abs(dx)>0.5||Math.abs(dy)>0.5)dragState.moved=true;
     cab.x=Math.max(0,Math.min(100-o.pw,o.x+dx));
     cab.y=Math.max(0,Math.min(100-o.ph,o.y+dy));
   } else {
@@ -679,7 +703,13 @@ function applyDragMove(ev){
 document.addEventListener('mousemove',applyDragMove);
 document.addEventListener('touchmove',ev=>{if(dragState){ev.preventDefault();applyDragMove(ev);}},{passive:false});
 document.addEventListener('mouseup',()=>{if(dragState){dragState=null;renderBBoxes();}});
-document.addEventListener('touchend',()=>{if(dragState){dragState=null;renderBBoxes();}});
+document.addEventListener('touchend',()=>{
+  if(dragState){
+    const wasMoved=dragState.moved;
+    dragState=null;
+    if(wasMoved)renderBBoxes();
+  }
+});
 
 function setTool(name,btn){
   tool=name;
@@ -707,7 +737,7 @@ function handleCanvasClick(e){
   setTool('select',document.getElementById('tool-select'));
 }
 
-function selectCab(id){
+function selectCab(id,openProps){
   selId=id;renderBBoxes();
   const cab=cabs.find(c=>c.id===id);if(!cab)return;
   document.getElementById('prop-type').value=cab.type;
@@ -715,7 +745,7 @@ function selectCab(id){
   document.getElementById('prop-h').value=cab.h;
   document.getElementById('door-count-val').textContent=cab.doors;
   document.getElementById('prop-hinge').value=cab.hinge;
-  openPropSheet();
+  if(openProps)openPropSheet();
 }
 
 function openPropSheet(){document.getElementById('prop-sheet').classList.add('open');}
