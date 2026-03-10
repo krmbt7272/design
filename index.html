@@ -96,22 +96,28 @@ button{cursor:pointer;touch-action:manipulation}
 .edit-bbox.selected{box-shadow:0 0 0 1px #c8a96e,0 0 16px #c8a96e40!important;border-color:#c8a96e!important}
 #add-hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);border:1px solid #c8a96e30;border-radius:4px;padding:5px 12px;font-size:10px;color:#c8a96e;pointer-events:none;display:none;white-space:nowrap}
 
-/* PROP SHEET (slides up on mobile) */
-#prop-sheet{position:absolute;bottom:0;left:0;right:0;background:#0c0c0c;border-top:1px solid #2a2a2a;border-radius:16px 16px 0 0;padding:16px;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:20;max-height:70%;overflow-y:auto}
-#prop-sheet.open{transform:translateY(0)}
-#prop-sheet-handle{width:36px;height:4px;background:#2a2a2a;border-radius:2px;margin:0 auto 14px}
-#prop-head{color:#252525;font-size:9px;letter-spacing:.2em;margin-bottom:14px}
-.pfield{margin-bottom:10px}
+/* PROP PANEL - always in flow, shown/hidden */
+#prop-panel{background:#0c0c0c;border-top:1px solid #2a2a2a;padding:12px 16px 6px;display:none;flex-shrink:0;overflow-y:auto;max-height:50vh}
+#prop-panel.visible{display:block}
+#prop-panel-hint{color:#1e1e1e;font-size:10px;letter-spacing:.06em;padding:8px 0;text-align:center;display:none}
+#prop-panel-hint.visible{display:block}
+#prop-head{color:#333;font-size:9px;letter-spacing:.2em;margin-bottom:10px}
+.pfields-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.pfield{margin-bottom:0}
+.pfield.full{grid-column:1/-1}
 .plabel{color:#2a2a2a;font-size:9px;letter-spacing:.1em;margin-bottom:4px}
-.pinput{width:100%;background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:10px 12px;color:#c8a96e;font-size:14px;outline:none;transition:border-color .15s}
+.pinput{width:100%;background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:9px 10px;color:#c8a96e;font-size:14px;outline:none}
 .pinput:focus{border-color:#c8a96e40}
-.pselect{width:100%;background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:10px 12px;color:#c8a96e;font-size:14px;outline:none}
+.pselect{width:100%;background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:9px 10px;color:#c8a96e;font-size:14px;outline:none}
 .pselect option{background:#111}
-#door-count-row{display:flex;align-items:center;gap:10px;width:100%}
+#door-count-row{display:flex;align-items:center;gap:8px}
 .dc-btn{width:44px;height:44px;background:#111;border:1px solid #1e1e1e;border-radius:8px;color:#888;font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dc-btn:active{background:#1a1a1a;color:#c8a96e}
 #door-count-val{flex:1;text-align:center;color:#c8a96e;font-size:20px;font-weight:500}
-#prop-delete-btn{width:100%;background:transparent;border:1px solid #ef444430;color:#ef4444;padding:10px;border-radius:6px;font-size:11px;letter-spacing:.08em;margin-top:6px}
+#prop-bottom-row{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:6px;border-top:1px solid #111}
+#prop-close-btn{background:transparent;border:1px solid #1e1e1e;color:#333;padding:8px 14px;border-radius:6px;font-size:10px;letter-spacing:.06em;min-height:40px}
+#prop-close-btn:active{background:#111}
+#prop-delete-btn{flex:1;background:transparent;border:1px solid #ef444430;color:#ef4444;padding:8px;border-radius:6px;font-size:11px;letter-spacing:.08em;min-height:40px}
 #prop-delete-btn:active{background:#ef444415}
 
 /* ══════════════════════════════
@@ -312,47 +318,50 @@ button{cursor:pointer;touch-action:manipulation}
     </div>
     <div id="add-hint">Kapak eklemek için dokun</div>
   </div>
-  <!-- prop sheet slides up -->
-  <div id="prop-sheet">
-    <div id="prop-sheet-handle"></div>
+  <!-- prop panel - shown when cab selected -->
+  <div id="prop-panel">
     <p id="prop-head">ÖZELLİKLER</p>
-    <div class="pfield">
-      <div class="plabel">TÜR</div>
-      <select class="pselect" id="prop-type" onchange="updateProp('type',this.value)">
-        <option value="Alt">Alt Dolap</option>
-        <option value="Üst">Üst Dolap</option>
-        <option value="Ankastre">Ankastre</option>
-      </select>
-    </div>
-    <div style="display:flex;gap:10px">
-      <div class="pfield" style="flex:1">
+    <div class="pfields-grid">
+      <div class="pfield full">
+        <div class="plabel">TÜR</div>
+        <select class="pselect" id="prop-type" onchange="updateProp('type',this.value)">
+          <option value="Alt">Alt Dolap</option>
+          <option value="Üst">Üst Dolap</option>
+          <option value="Ankastre">Ankastre</option>
+        </select>
+      </div>
+      <div class="pfield">
         <div class="plabel">GENİŞLİK cm</div>
         <input class="pinput" id="prop-w" type="number" min="10" max="300" onchange="updateProp('w',this.value)">
       </div>
-      <div class="pfield" style="flex:1">
+      <div class="pfield">
         <div class="plabel">YÜKSEKLİK cm</div>
         <input class="pinput" id="prop-h" type="number" min="10" max="300" onchange="updateProp('h',this.value)">
       </div>
-    </div>
-    <div class="pfield">
-      <div class="plabel">KAPI SAYISI</div>
-      <div id="door-count-row">
-        <button class="dc-btn" ontouchstart="this.style.background='#1a1a1a'" ontouchend="this.style.background=''" onclick="changeDoors(-1)">−</button>
-        <span id="door-count-val">1</span>
-        <button class="dc-btn" ontouchstart="this.style.background='#1a1a1a'" ontouchend="this.style.background=''" onclick="changeDoors(1)">+</button>
+      <div class="pfield">
+        <div class="plabel">KAPI SAYISI</div>
+        <div id="door-count-row">
+          <button class="dc-btn" onclick="changeDoors(-1)">−</button>
+          <span id="door-count-val">1</span>
+          <button class="dc-btn" onclick="changeDoors(1)">+</button>
+        </div>
+      </div>
+      <div class="pfield">
+        <div class="plabel">MENTEŞE YÖNÜ</div>
+        <select class="pselect" id="prop-hinge" onchange="updateProp('hinge',this.value)">
+          <option value="Sol">Sol</option>
+          <option value="Sağ">Sağ</option>
+          <option value="İki Yön">İki Yön</option>
+          <option value="—">—</option>
+        </select>
       </div>
     </div>
-    <div class="pfield">
-      <div class="plabel">MENTEŞEsince YÖNÜ</div>
-      <select class="pselect" id="prop-hinge" onchange="updateProp('hinge',this.value)">
-        <option value="Sol">Sol</option>
-        <option value="Sağ">Sağ</option>
-        <option value="İki Yön">İki Yön</option>
-        <option value="—">—</option>
-      </select>
+    <div id="prop-bottom-row">
+      <button id="prop-close-btn" onclick="closePropPanel()">✕ Kapat</button>
+      <button id="prop-delete-btn" onclick="deleteSelected()">🗑 Kapağı Sil</button>
     </div>
-    <button id="prop-delete-btn" onclick="deleteSelected()">🗑 Seçili kapağı sil</button>
   </div>
+  <p id="prop-panel-hint">Kapağa çift dokun → özellikler</p>
   <div id="step-nav">
     <button class="nav-back" onclick="goTo(0)">← GERİ</button>
     <button class="nav-next" onclick="goTo(2)">RENK & MALZEME →</button>
@@ -522,7 +531,10 @@ function goTo(n){
   step=n;
   document.querySelectorAll('.screen').forEach((s,i)=>s.classList.toggle('active',i===n));
   buildStepper();
-  if(n===1){syncImg('edit-photo');renderBBoxes();}
+  if(n===1){syncImg('edit-photo');renderBBoxes();
+    document.getElementById('prop-panel').classList.remove('visible');
+    document.getElementById('prop-panel-hint').classList.add('visible');
+  }
   if(n===2){syncImg('mat-photo');syncMatPhoto();buildMatSpheres();updateRGB();}
   if(n===3){syncImg('ana-photo');renderAnaOverlays();buildAnaTable();}
   if(n===4)buildStudioModel();
@@ -716,7 +728,7 @@ function setTool(name,btn){
   document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('add-hint').style.display=name==='add'?'block':'none';
-  if(name!=='select'){selId=null;closePropSheet();renderBBoxes();}
+  if(name!=='select'){selId=null;closePropPanel();renderBBoxes();}
 }
 
 function handleCanvasClick(e){
@@ -745,11 +757,18 @@ function selectCab(id,openProps){
   document.getElementById('prop-h').value=cab.h;
   document.getElementById('door-count-val').textContent=cab.doors;
   document.getElementById('prop-hinge').value=cab.hinge;
-  if(openProps)openPropSheet();
+  if(openProps)openPropPanel();
 }
 
-function openPropSheet(){document.getElementById('prop-sheet').classList.add('open');}
-function closePropSheet(){document.getElementById('prop-sheet').classList.remove('open');}
+function openPropPanel(){
+  document.getElementById('prop-panel').classList.add('visible');
+  document.getElementById('prop-panel-hint').classList.remove('visible');
+}
+function closePropPanel(){
+  document.getElementById('prop-panel').classList.remove('visible');
+  selId=null;renderBBoxes();
+  document.getElementById('prop-panel-hint').classList.add('visible');
+}
 
 function updateProp(k,v){
   if(!selId)return;
@@ -770,7 +789,8 @@ function changeDoors(d){
 
 function deleteSelected(){
   if(!selId)return;
-  cabs=cabs.filter(c=>c.id!==selId);selId=null;closePropSheet();renderBBoxes();
+  cabs=cabs.filter(c=>c.id!==selId);
+  closePropPanel();
 }
 
 /* ═══════ MATERIAL ═══════ */
