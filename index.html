@@ -495,7 +495,7 @@ button{cursor:pointer;touch-action:manipulation}
 const STEPS=["Tara","Düzenle","Renk","Analiz","3D","Sunum"];
 let step=0,imgURL=null,cabs=[],selId=null,tool='select',cabCtr=0;
 let matHistory=[],activeMat={color:'#2e2e2e',name:'Antrasit Mat',shine:false};
-let doorsOpen=false,dragState=null;
+let doorsOpen=false,dragState=null,lastTapMap={};
 
 const PRESETS=[
   {name:'Antrasit Mat',color:'#2e2e2e',shine:false},
@@ -614,20 +614,23 @@ function initCabs(){
 /* ═══════ EDIT ═══════ */
 function syncImg(id){const el=document.getElementById(id);if(imgURL){el.src=imgURL;el.classList.remove('placeholder');el.style.background='';}}
 
+// ── DRAG ENGINE ──────────────────────────────────────────────
+// dragState: null | {cabId, mode:'move'|'resize', handle, startX, startY, orig, moved}
+// tapState:  tracks tap timing per cab id, survives renderBBoxes()
+
 function renderBBoxes(){
   const c=document.getElementById('edit-bboxes');c.innerHTML='';
   const clr={Alt:'#3b82f6',Üst:'#22c55e',Ankastre:'#f97316'};
   cabs.forEach(cab=>{
     const bc=clr[cab.type]||'#888';
     const d=document.createElement('div');d.className='edit-bbox';d.id='eb-'+cab.id;
-    d.style.cssText='left:'+cab.x+'%;top:'+cab.y+'%;width:'+cab.pw+'%;height:'+cab.ph+'%;border-color:'+bc+(selId===cab.id?'':'60')+';cursor:move';
+    d.style.cssText='left:'+cab.x+'%;top:'+cab.y+'%;width:'+cab.pw+'%;height:'+cab.ph+'%;border-color:'+bc+(selId===cab.id?'':'60')+';cursor:move;touch-action:none';
     if(selId===cab.id){
       d.classList.add('selected');
       const lbl=document.createElement('div');
       lbl.style.cssText='position:absolute;top:-20px;left:0;background:'+bc+';color:#000;font-size:8px;padding:2px 6px;border-radius:2px;white-space:nowrap;pointer-events:none;font-family:inherit';
       lbl.textContent=cab.type+' · '+cab.w+'×'+cab.h+'cm · '+cab.doors+'K';
       d.appendChild(lbl);
-      // Resize handles (bigger for touch)
       [['nw','top:-7px;left:-7px;cursor:nw-resize'],['ne','top:-7px;right:-7px;cursor:ne-resize'],
        ['se','bottom:-7px;right:-7px;cursor:se-resize'],['sw','bottom:-7px;left:-7px;cursor:sw-resize'],
        ['n','top:-7px;left:calc(50% - 7px);cursor:n-resize'],['s','bottom:-7px;left:calc(50% - 7px);cursor:s-resize'],
@@ -635,45 +638,76 @@ function renderBBoxes(){
       ].forEach(([hname,pos])=>{
         const h=document.createElement('div');
         h.style.cssText='position:absolute;width:14px;height:14px;background:#c8a96e;border:2px solid #0a0805;border-radius:3px;z-index:10;touch-action:none;'+pos;
-        const startFn=ev=>{
+        h.addEventListener('pointerdown',ev=>{
           ev.stopPropagation();ev.preventDefault();
-          const p=ev.touches?ev.touches[0]:ev;
-          dragState={cabId:cab.id,mode:'resize',handle:hname,startX:p.clientX,startY:p.clientY,orig:{...cab}};
-        };
-        h.addEventListener('mousedown',startFn);
-        h.addEventListener('touchstart',startFn,{passive:false});
+          h.setPointerCapture(ev.pointerId);
+          dragState={cabId:cab.id,mode:'resize',handle:hname,startX:ev.clientX,startY:ev.clientY,orig:{...cab},moved:false};
+        });
         d.appendChild(h);
       });
     }
-    let lastTap=0;
-    const startMove=ev=>{
+    // Use Pointer Events for unified mouse+touch drag
+    d.addEventListener('pointerdown',ev=>{
       if(ev.target!==d)return;
       ev.stopPropagation();ev.preventDefault();
-      // select without opening props
+      d.setPointerCapture(ev.pointerId);
+      dragState={cabId:cab.id,mode:'move',startX:ev.clientX,startY:ev.clientY,orig:{...cab},moved:false,pointerId:ev.pointerId};
       selId=cab.id;
       const info=document.getElementById('edit-sel-info');
       if(info)info.textContent=cab.type+' seçili';
-      const p=ev.touches?ev.touches[0]:ev;
-      dragState={cabId:cab.id,mode:'move',startX:p.clientX,startY:p.clientY,orig:{...cab},moved:false};
-    };
-    d.addEventListener('mousedown',startMove);
-    d.addEventListener('touchstart',startMove,{passive:false});
-    // single click on desktop selects, double click opens props
-    d.addEventListener('click',ev=>{
-      ev.stopPropagation();
-      const now=Date.now();
-      if(now-lastTap<350){selectCab(cab.id,true);} // double click
-      else{selectCab(cab.id,false);}               // single click
-      lastTap=now;
+      // update border color immediately without full re-render
+      d.style.borderColor=bc;
+      d.classList.add('selected');
     });
-    // touch: double tap opens props
-    d.addEventListener('touchend',ev=>{
+    d.addEventListener('pointermove',ev=>{
+      if(!dragState||dragState.cabId!==cab.id)return;
       ev.stopPropagation();
-      if(dragState&&dragState.moved)return; // was a drag, not a tap
-      const now=Date.now();
-      if(now-lastTap<350){selectCab(cab.id,true);}
-      else{selectCab(cab.id,false);}
-      lastTap=now;
+      const cont=document.getElementById('edit-img-container');
+      const rect=cont.getBoundingClientRect();
+      const dx=((ev.clientX-dragState.startX)/rect.width)*100;
+      const dy=((ev.clientY-dragState.startY)/rect.height)*100;
+      if(Math.abs(dx)>0.8||Math.abs(dy)>0.8)dragState.moved=true;
+      const o=dragState.orig;
+      if(dragState.mode==='move'){
+        cab.x=Math.max(0,Math.min(100-o.pw,o.x+dx));
+        cab.y=Math.max(0,Math.min(100-o.ph,o.y+dy));
+        d.style.left=cab.x+'%';d.style.top=cab.y+'%';
+      } else {
+        const h=dragState.handle;
+        let nx=o.x,ny=o.y,npw=o.pw,nph=o.ph;
+        if(h.includes('e')){npw=Math.max(5,o.pw+dx);}
+        if(h.includes('s')){nph=Math.max(5,o.ph+dy);}
+        if(h.includes('w')){const nw=Math.max(5,o.pw-dx);nx=o.x+o.pw-nw;npw=nw;}
+        if(h.includes('n')){const nh=Math.max(5,o.ph-dy);ny=o.y+o.ph-nh;nph=nh;}
+        cab.x=Math.max(0,Math.min(100-npw,nx));
+        cab.y=Math.max(0,Math.min(100-nph,ny));
+        cab.pw=Math.max(5,Math.min(npw,100-cab.x));
+        cab.ph=Math.max(5,Math.min(nph,100-cab.y));
+        // update resize handle source element's parent
+        const el=document.getElementById('eb-'+cab.id);
+        if(el){el.style.left=cab.x+'%';el.style.top=cab.y+'%';el.style.width=cab.pw+'%';el.style.height=cab.ph+'%';}
+      }
+    });
+    d.addEventListener('pointerup',ev=>{
+      if(!dragState||dragState.cabId!==cab.id)return;
+      ev.stopPropagation();
+      const wasMoved=dragState.moved;
+      dragState=null;
+      if(wasMoved){
+        renderBBoxes(); // re-draw after real drag
+      } else {
+        // It was a tap — check double tap
+        const now=Date.now();
+        const last=lastTapMap[cab.id]||0;
+        lastTapMap[cab.id]=now;
+        if(now-last<400){
+          // DOUBLE TAP — open props
+          selectCab(cab.id,true);
+        } else {
+          // single tap — just select visually
+          selectCab(cab.id,false);
+        }
+      }
     });
     c.appendChild(d);
   });
@@ -682,46 +716,6 @@ function renderBBoxes(){
   if(selId){const cab=cabs.find(c=>c.id===selId);if(cab)info.textContent=cab.type+' seçili';}
   else info.textContent='Kapağa dokun';
 }
-
-function applyDragMove(ev){
-  if(!dragState)return;
-  const p=ev.touches?ev.touches[0]:ev;
-  const cont=document.getElementById('edit-img-container');
-  const rect=cont.getBoundingClientRect();
-  const dx=((p.clientX-dragState.startX)/rect.width)*100;
-  const dy=((p.clientY-dragState.startY)/rect.height)*100;
-  const cab=cabs.find(c=>c.id===dragState.cabId);if(!cab)return;
-  const o=dragState.orig;
-  if(dragState.mode==='move'){
-    if(Math.abs(dx)>0.5||Math.abs(dy)>0.5)dragState.moved=true;
-    cab.x=Math.max(0,Math.min(100-o.pw,o.x+dx));
-    cab.y=Math.max(0,Math.min(100-o.ph,o.y+dy));
-  } else {
-    const h=dragState.handle;
-    let nx=o.x,ny=o.y,npw=o.pw,nph=o.ph;
-    if(h.includes('e')){npw=Math.max(5,o.pw+dx);}
-    if(h.includes('s')){nph=Math.max(5,o.ph+dy);}
-    if(h.includes('w')){const nw=Math.max(5,o.pw-dx);nx=o.x+o.pw-nw;npw=nw;}
-    if(h.includes('n')){const nh=Math.max(5,o.ph-dy);ny=o.y+o.ph-nh;nph=nh;}
-    cab.x=Math.max(0,Math.min(100-npw,nx));
-    cab.y=Math.max(0,Math.min(100-nph,ny));
-    cab.pw=Math.max(5,Math.min(npw,100-cab.x));
-    cab.ph=Math.max(5,Math.min(nph,100-cab.y));
-  }
-  const el=document.getElementById('eb-'+cab.id);
-  if(el){el.style.left=cab.x+'%';el.style.top=cab.y+'%';el.style.width=cab.pw+'%';el.style.height=cab.ph+'%';}
-}
-
-document.addEventListener('mousemove',applyDragMove);
-document.addEventListener('touchmove',ev=>{if(dragState){ev.preventDefault();applyDragMove(ev);}},{passive:false});
-document.addEventListener('mouseup',()=>{if(dragState){dragState=null;renderBBoxes();}});
-document.addEventListener('touchend',()=>{
-  if(dragState){
-    const wasMoved=dragState.moved;
-    dragState=null;
-    if(wasMoved)renderBBoxes();
-  }
-});
 
 function setTool(name,btn){
   tool=name;
